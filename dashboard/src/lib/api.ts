@@ -148,10 +148,17 @@ export interface EvalRun {
 
 export interface RetrievalResult {
   text: string;
-  source: string;
   score: number;
+  vector_score?: number;
+  sparse_score?: number;
   chunk_index: number;
-  search_type: string;
+  metadata?: {
+    source?: string;
+    file_type?: string;
+    page?: number;
+    strategy?: string;
+    token_count?: number;
+  };
 }
 
 export const api = {
@@ -227,17 +234,19 @@ export const api = {
     });
   },
 
-  retrieve: (params: {
+  retrieve: async (params: {
     query: string;
     collection: string;
     top_k?: number;
     alpha?: number;
     source_filter?: string;
-  }) =>
-    fetchAPI<RetrievalResult[]>('/api/retrieve', {
+  }): Promise<RetrievalResult[]> => {
+    const data = await fetchAPI<{ query: string; chunks: RetrievalResult[] }>('/api/retrieve', {
       method: 'POST',
       body: JSON.stringify(params),
-    }),
+    });
+    return data.chunks;
+  },
 
   getMetrics: (collection?: string, limit?: number) => {
     const params = new URLSearchParams();

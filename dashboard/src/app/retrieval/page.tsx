@@ -6,10 +6,17 @@ import { cn, formatNumber } from '@/lib/utils';
 
 interface RetrievalResult {
   text: string;
-  source: string;
   score: number;
+  vector_score?: number;
+  sparse_score?: number;
   chunk_index: number;
-  search_type: string;
+  metadata?: {
+    source?: string;
+    file_type?: string;
+    page?: number;
+    strategy?: string;
+    token_count?: number;
+  };
 }
 
 export default function RetrievalExplorer() {
@@ -163,7 +170,7 @@ export default function RetrievalExplorer() {
                       <span className="rounded-full bg-brand-100 dark:bg-brand-900/30 px-2.5 py-0.5 text-xs font-bold text-brand-700 dark:text-brand-300">
                         #{i + 1}
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{result.source}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{result.metadata?.source?.split('_').pop() || 'unknown'}</span>
                       <span className="text-xs text-gray-400">chunk {result.chunk_index}</span>
                     </div>
                     <span className="text-sm font-mono font-medium text-gray-900 dark:text-white">

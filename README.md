@@ -86,6 +86,20 @@ RAG Eval Engine is a **complete RAG system** that doesn't just answer questions 
 - **Responsive** — works on mobile with collapsible sidebar
 - **Real-time streaming** — watch tokens appear as the LLM generates
 
+### Screenshots
+
+| Query Playground | Document Management |
+|---|---|
+| ![Query Playground](screenshots/01-query-playground.png) | ![Documents](screenshots/02-documents.png) |
+
+| Retrieval Explorer | Evaluation Dashboard |
+|---|---|
+| ![Retrieval](screenshots/03-retrieval.png) | ![Evaluation](screenshots/04-eval.png) |
+
+| Test Sets | Settings |
+|---|---|
+| ![Test Sets](screenshots/05-test-sets.png) | ![Settings](screenshots/06-settings.png) |
+
 ---
 
 ## Architecture

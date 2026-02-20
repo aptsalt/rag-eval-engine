@@ -39,9 +39,9 @@ dashboard/.env.local
 Thumbs.db
 
 # Misc
-*.png
 *.jpg
 *.jpeg
+!screenshots/*.png
 nul
 .playwright-mcp/
 test_upload.txt
