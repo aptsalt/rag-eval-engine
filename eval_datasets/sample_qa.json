@@ -1,0 +1,22 @@
+[
+  {
+    "question": "What is retrieval-augmented generation?",
+    "ground_truth": "Retrieval-Augmented Generation (RAG) is a technique that combines information retrieval with text generation. It retrieves relevant documents from a knowledge base and uses them as context for a language model to generate more accurate and grounded answers."
+  },
+  {
+    "question": "What are the main types of machine learning?",
+    "ground_truth": "The three main types of machine learning are supervised learning (learns from labeled data), unsupervised learning (finds patterns in unlabeled data), and reinforcement learning (learns through rewards and penalties)."
+  },
+  {
+    "question": "How does hybrid search work?",
+    "ground_truth": "Hybrid search combines vector-based semantic search with keyword-based sparse search (like BM25). Results from both methods are merged using techniques like Reciprocal Rank Fusion (RRF), which weights and combines the rankings to produce more robust search results."
+  },
+  {
+    "question": "What metrics are used to evaluate RAG systems?",
+    "ground_truth": "Key RAG evaluation metrics include faithfulness (whether answers are grounded in context), answer relevance (whether answers address the question), context precision (whether retrieved chunks are relevant), context recall (whether all necessary information was retrieved), and hallucination rate (proportion of ungrounded claims)."
+  },
+  {
+    "question": "What is chunking in document processing?",
+    "ground_truth": "Chunking is the process of splitting documents into smaller segments for embedding and retrieval. Common strategies include fixed-size chunking with overlap, recursive character splitting that respects document structure, and semantic chunking that preserves sentence boundaries."
+  }
+]

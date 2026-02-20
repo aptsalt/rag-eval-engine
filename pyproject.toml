@@ -1,0 +1,52 @@
+[project]
+name = "rag-eval-engine"
+version = "1.0.0"
+description = "Production RAG system with built-in evaluation — hybrid retrieval, multi-model support, quality metrics dashboard"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "qdrant-client>=1.12.0",
+    "sentence-transformers>=3.3.0",
+    "rank-bm25>=0.2.2",
+    "httpx>=0.28.0",
+    "aiosqlite>=0.20.0",
+    "python-multipart>=0.0.12",
+    "pymupdf>=1.25.0",
+    "python-docx>=1.1.0",
+    "tiktoken>=0.8.0",
+    "numpy>=1.26.0",
+    "nltk>=3.9.0",
+    "openai>=1.55.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+    "pyright>=1.1.390",
+    "ruff>=0.8.0",
+]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

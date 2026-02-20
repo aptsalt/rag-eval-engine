@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+
+# Environment
+.env
+
+# Runtime data
+data/
+uploads/
+*.db
+*.sqlite
+
+# Node / Next.js
+node_modules/
+.next/
+dashboard/.next/
+dashboard/node_modules/
+dashboard/.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.png
+*.jpg
+*.jpeg
+nul
+.playwright-mcp/
+test_upload.txt
+rag-engine-prp.md
+*.tsbuildinfo
