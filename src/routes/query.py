@@ -23,6 +23,7 @@ class QueryRequest(BaseModel):
     model: str | None = None
     stream: bool = False
     evaluate: bool = True
+    auto_tune: bool = False
 
 
 class SourceInfo(BaseModel):
@@ -51,6 +52,8 @@ class QueryResponse(BaseModel):
     tokens_used: int
     latency_ms: float
     model: str
+    cache_hit: bool = False
+    cost_usd: float = 0.0
 
 
 @router.post("/query", response_model=None)
@@ -65,6 +68,7 @@ async def query_rag(request: QueryRequest) -> QueryResponse | StreamingResponse:
         model=request.model,
         evaluate=request.evaluate,
         lightweight_eval=settings.eval_lightweight,
+        auto_tune=request.auto_tune,
     )
 
     eval_response = None
@@ -87,6 +91,8 @@ async def query_rag(request: QueryRequest) -> QueryResponse | StreamingResponse:
         tokens_used=result.tokens_used,
         latency_ms=result.latency_ms,
         model=result.model,
+        cache_hit=result.cache_hit,
+        cost_usd=result.cost_usd,
     )
 
 

@@ -12,6 +12,8 @@ interface Message {
   latencyMs?: number;
   model?: string;
   streaming?: boolean;
+  cacheHit?: boolean;
+  costUsd?: number;
 }
 
 const SUGGESTED_QUERIES = [
@@ -43,6 +45,15 @@ export default function QueryPlayground() {
         setSelectedModel(m[0].name);
       }
     }).catch(() => {});
+
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
   }, []);
 
   useEffect(() => {
@@ -146,6 +157,8 @@ export default function QueryPlayground() {
           evalScores: response.eval_scores,
           latencyMs: response.latency_ms,
           model: response.model,
+          cacheHit: response.cache_hit,
+          costUsd: response.cost_usd,
         },
       ]);
     } catch (error) {
@@ -361,12 +374,26 @@ export default function QueryPlayground() {
                   </div>
                 </div>
 
-                {msg.role === 'assistant' && msg.evalScores && (
+                {msg.role === 'assistant' && !msg.streaming && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <ScoreBadge label="Faithfulness" value={msg.evalScores.faithfulness} />
-                    <ScoreBadge label="Relevance" value={msg.evalScores.relevance} />
-                    {msg.evalScores.hallucination_rate > 0 && (
-                      <ScoreBadge label="Hallucination" value={msg.evalScores.hallucination_rate} invert />
+                    {msg.cacheHit && (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        Cached
+                      </span>
+                    )}
+                    {msg.evalScores && (
+                      <>
+                        <ScoreBadge label="Faithfulness" value={msg.evalScores.faithfulness} />
+                        <ScoreBadge label="Relevance" value={msg.evalScores.relevance} />
+                        {msg.evalScores.hallucination_rate > 0 && (
+                          <ScoreBadge label="Hallucination" value={msg.evalScores.hallucination_rate} invert />
+                        )}
+                      </>
+                    )}
+                    {msg.costUsd !== undefined && (
+                      <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-700 px-2.5 py-0.5 text-xs text-gray-600 dark:text-gray-300">
+                        ${msg.costUsd.toFixed(msg.costUsd > 0 ? 4 : 2)}
+                      </span>
                     )}
                     {msg.latencyMs && (
                       <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-700 px-2.5 py-0.5 text-xs text-gray-600 dark:text-gray-300">
@@ -436,7 +463,7 @@ export default function QueryPlayground() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask a question about your documents..."
+              placeholder="Ask a question about your documents... (Ctrl+K to focus)"
               disabled={loading}
               rows={1}
               className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-3 pr-12 text-sm dark:text-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50 placeholder:text-gray-400"

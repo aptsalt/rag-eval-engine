@@ -25,6 +25,16 @@ async def init_db() -> None:
     db = await get_db()
     try:
         await db.executescript(SCHEMA)
+        # Migrate: add columns that may not exist in older databases
+        for col, typedef in [
+            ("cost_usd", "REAL NOT NULL DEFAULT 0"),
+            ("alpha", "REAL"),
+            ("top_k", "INTEGER"),
+        ]:
+            try:
+                await db.execute(f"ALTER TABLE query_log ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass  # Column already exists
         await db.commit()
     finally:
         await db.close()
@@ -67,6 +77,9 @@ CREATE TABLE IF NOT EXISTS query_log (
     latency_ms REAL NOT NULL DEFAULT 0,
     latency_retrieval_ms REAL NOT NULL DEFAULT 0,
     latency_generation_ms REAL NOT NULL DEFAULT 0,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    alpha REAL,
+    top_k INTEGER,
     created_at REAL NOT NULL
 );
 
@@ -95,6 +108,16 @@ CREATE TABLE IF NOT EXISTS test_sets (
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS cache_stats (
+    id TEXT PRIMARY KEY,
+    query_hash TEXT NOT NULL,
+    hit_or_miss TEXT NOT NULL,
+    saved_latency_ms REAL NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cache_stats_hit ON cache_stats(hit_or_miss);
 
 CREATE TABLE IF NOT EXISTS eval_runs (
     id TEXT PRIMARY KEY,
@@ -219,14 +242,18 @@ async def insert_query_log(
     latency_ms: float,
     latency_retrieval_ms: float,
     latency_generation_ms: float,
+    cost_usd: float = 0.0,
+    alpha: float | None = None,
+    top_k: int | None = None,
 ) -> None:
     db = await get_db()
     try:
         await db.execute(
             """INSERT INTO query_log
             (id, collection, query, answer, sources, model, tokens_used,
-             latency_ms, latency_retrieval_ms, latency_generation_ms, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             latency_ms, latency_retrieval_ms, latency_generation_ms,
+             cost_usd, alpha, top_k, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 query_id,
                 collection,
@@ -238,6 +265,9 @@ async def insert_query_log(
                 latency_ms,
                 latency_retrieval_ms,
                 latency_generation_ms,
+                cost_usd,
+                alpha,
+                top_k,
                 time.time(),
             ),
         )
@@ -287,7 +317,7 @@ async def get_metrics(
         query = """
             SELECT q.id, q.collection, q.query, q.latency_ms,
                    q.latency_retrieval_ms, q.latency_generation_ms,
-                   q.tokens_used, q.created_at,
+                   q.tokens_used, q.cost_usd, q.alpha, q.top_k, q.created_at,
                    e.faithfulness, e.relevance, e.hallucination_rate,
                    e.context_precision, e.context_recall
             FROM query_log q

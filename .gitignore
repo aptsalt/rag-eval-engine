@@ -27,6 +27,7 @@ node_modules/
 dashboard/.next/
 dashboard/node_modules/
 dashboard/.env.local
+*.tsbuildinfo
 
 # IDE
 .vscode/
@@ -37,13 +38,7 @@ dashboard/.env.local
 # OS
 .DS_Store
 Thumbs.db
-
-# Misc
-*.jpg
-*.jpeg
-!screenshots/*.png
 nul
+
+# Testing / Debug
 .playwright-mcp/
-test_upload.txt
-rag-engine-prp.md
-*.tsbuildinfo

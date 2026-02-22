@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { api, type MetricsResponse, type Collection } from '@/lib/api';
+import { api, type MetricsResponse, type CacheStats, type Collection } from '@/lib/api';
 import { cn, formatMs, formatPercent, scoreBgColor, scoreColor } from '@/lib/utils';
+import { SkeletonCard, SkeletonChart } from '@/components/skeleton';
 import {
   LineChart,
   Line,
@@ -20,6 +21,7 @@ import {
 
 export default function EvalDashboard() {
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
+  const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<string | undefined>(undefined);
@@ -27,8 +29,12 @@ export default function EvalDashboard() {
 
   const loadMetrics = async () => {
     try {
-      const data = await api.getMetrics(selectedCollection, 200);
+      const [data, cache] = await Promise.all([
+        api.getMetrics(selectedCollection, 200),
+        api.getCacheStats().catch(() => null),
+      ]);
       setMetrics(data);
+      setCacheStats(cache);
     } catch {
       // API unavailable
     } finally {
@@ -47,12 +53,34 @@ export default function EvalDashboard() {
     return () => clearInterval(interval);
   }, [selectedCollection, autoRefresh]);
 
+  const exportCSV = () => {
+    if (!metrics) return;
+    const headers = 'query_id,timestamp,faithfulness,relevance,hallucination_rate,latency_ms,tokens_used,cost_usd\n';
+    const rows = metrics.time_series.map((p) =>
+      [p.query_id, new Date(p.timestamp * 1000).toISOString(), p.faithfulness, p.relevance, p.hallucination_rate, p.latency_ms, p.tokens_used, p.cost_usd].join(',')
+    ).join('\n');
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rag-metrics-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600 mx-auto" />
-          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading metrics...</p>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Evaluation Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Track RAG quality metrics over time</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+        </div>
+        <SkeletonChart />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <SkeletonChart /><SkeletonChart />
         </div>
       </div>
     );
@@ -87,6 +115,7 @@ export default function EvalDashboard() {
     hallucination: point.hallucination_rate !== null ? point.hallucination_rate * 100 : null,
     latency: point.latency_ms,
     tokens: point.tokens_used,
+    cost: point.cost_usd,
   }));
 
   return (
@@ -110,6 +139,12 @@ export default function EvalDashboard() {
             ))}
           </select>
           <button
+            onClick={exportCSV}
+            className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            Export CSV
+          </button>
+          <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={cn(
               'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
@@ -130,7 +165,7 @@ export default function EvalDashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
           label="Avg Faithfulness"
           value={metrics.avg_faithfulness}
@@ -156,7 +191,40 @@ export default function EvalDashboard() {
           format="ms"
           description="95th percentile response time"
         />
+        <MetricCard
+          label="Total Cost"
+          value={metrics.total_cost_usd}
+          format="usd"
+          description={`$${metrics.avg_cost_per_query.toFixed(4)}/query avg`}
+        />
       </div>
+
+      {/* Cache Stats */}
+      {cacheStats && cacheStats.cache_enabled && (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Query Cache</h2>
+          <div className="mt-4 grid gap-6 sm:grid-cols-4">
+            <div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Hit Rate</p>
+              <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{cacheStats.hit_rate_percent}%</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Cached Entries</p>
+              <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{cacheStats.cache_size}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Queries Saved</p>
+              <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{cacheStats.hits}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg Latency Saved</p>
+              <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">
+                {cacheStats.avg_saved_latency_ms > 0 ? formatMs(cacheStats.avg_saved_latency_ms) : 'N/A'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quality Over Time - Area Chart */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
@@ -191,19 +259,19 @@ export default function EvalDashboard() {
         </div>
       </div>
 
-      {/* Latency & Tokens */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* Latency, Tokens & Cost */}
+      <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Latency Distribution</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Response time per query</p>
-          <div className="mt-4 h-64">
+          <div className="mt-4 h-52">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="index" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} label={{ value: 'ms', angle: -90, position: 'insideLeft' }} />
+                <XAxis dataKey="index" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(value: number) => [`${value.toFixed(0)}ms`]} />
-                <Bar dataKey="latency" fill="#0ea5e9" radius={[4, 4, 0, 0]} name="Latency" />
+                <Bar dataKey="latency" fill="#0ea5e9" radius={[3, 3, 0, 0]} name="Latency" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -212,14 +280,30 @@ export default function EvalDashboard() {
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Token Usage</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Tokens consumed per query</p>
-          <div className="mt-4 h-64">
+          <div className="mt-4 h-52">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="index" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
+                <XAxis dataKey="index" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="tokens" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Tokens" />
+                <Bar dataKey="tokens" fill="#8b5cf6" radius={[3, 3, 0, 0]} name="Tokens" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Cost per Query</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">USD cost per query ($0 for Ollama)</p>
+          <div className="mt-4 h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="index" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(value: number) => [`$${value.toFixed(4)}`]} />
+                <Bar dataKey="cost" fill="#f59e0b" radius={[3, 3, 0, 0]} name="Cost ($)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -261,14 +345,16 @@ function MetricCard({
 }: {
   label: string;
   value: number | null;
-  format: 'percent' | 'ms';
+  format: 'percent' | 'ms' | 'usd';
   description: string;
   invert?: boolean;
 }) {
   const displayValue = value !== null
     ? format === 'percent'
       ? formatPercent(value)
-      : formatMs(value)
+      : format === 'ms'
+        ? formatMs(value)
+        : `$${value.toFixed(4)}`
     : 'N/A';
 
   const colorScore = value !== null

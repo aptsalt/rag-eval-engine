@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "rag-eval-engine": {
+      "command": "python",
+      "args": ["-m", "src.mcp_server"],
+      "cwd": ".",
+      "env": {
+        "RAG_QDRANT_URL": "http://localhost:6333",
+        "RAG_OLLAMA_URL": "http://localhost:11434"
+      }
+    }
+  }
+}

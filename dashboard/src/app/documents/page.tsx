@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, type Collection, type JobStatus } from '@/lib/api';
 import { cn, formatNumber } from '@/lib/utils';
+import { useToast } from '@/components/toast';
+import { SkeletonCard, SkeletonRow } from '@/components/skeleton';
 
 const MAX_FILE_SIZE_MB = 50;
 const MAX_FILES_PER_UPLOAD = 20;
@@ -31,7 +33,9 @@ function getFileTypeInfo(filename: string) {
 }
 
 export default function DocumentsPage() {
+  const { addToast } = useToast();
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [collectionName, setCollectionName] = useState('documents');
@@ -49,6 +53,8 @@ export default function DocumentsPage() {
       setCollections(cols);
     } catch {
       // API not available
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -115,6 +121,7 @@ export default function DocumentsPage() {
         chunking_strategy: chunkingStrategy,
         chunk_size: chunkSize,
       });
+      addToast(`Upload started: ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}`, 'success');
       setActiveJob({
         job_id: response.job_id,
         status: response.status,
@@ -138,9 +145,10 @@ export default function DocumentsPage() {
     if (!confirm(`Delete collection "${name}" and all its documents?`)) return;
     try {
       await api.deleteCollection(name);
+      addToast(`Collection "${name}" deleted`, 'success');
       loadCollections();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
+      addToast(err instanceof Error ? err.message : 'Delete failed', 'error');
     }
   };
 

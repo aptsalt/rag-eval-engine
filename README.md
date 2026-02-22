@@ -9,7 +9,7 @@
   <a href="#features"><strong>Features</strong></a> &middot;
   <a href="#quick-start"><strong>Quick Start</strong></a> &middot;
   <a href="#architecture"><strong>Architecture</strong></a> &middot;
-  <a href="#dashboard"><strong>Dashboard</strong></a> &middot;
+  <a href="#mcp-server"><strong>MCP</strong></a> &middot;
   <a href="#api-reference"><strong>API</strong></a> &middot;
   <a href="#configuration"><strong>Config</strong></a>
 </p>
@@ -51,12 +51,32 @@ RAG Eval Engine is a **complete RAG system** that doesn't just answer questions 
 - Configurable chunk size and overlap with token-aware sizing
 - Batch embedding with progress tracking
 
-### LLM Generation
+### Semantic Query Cache (FACT Pattern)
+- **Embedding-based** similarity matching on Qdrant `_query_cache` collection
+- Configurable threshold (default 0.95) and TTL (default 1 hour)
+- Cache hit tracking with latency savings dashboard
+- Sub-100ms responses on cache hits
+
+### Multi-Provider LLM Routing
 - **Ollama-first** (qwen2.5-coder, llama3, mistral, deepseek, etc.)
-- OpenAI-compatible fallback
-- **Streaming SSE** for real-time token output
-- RAG-specific prompting with source citation instructions
+- **OpenAI** (gpt-4o, gpt-4o-mini, o1, o3-mini)
+- **Anthropic** (claude-3.5-sonnet, claude-3-opus) via httpx — no SDK dependency
+- Automatic routing: `claude-*` → Anthropic, `gpt-*` → OpenAI, else → Ollama
+- **Per-query cost tracking** with token-based calculation
+- **Streaming SSE** for all three providers
 - Context window management with token budgeting
+
+### MCP Server
+- Expose RAG as **MCP tools** for Claude Code / any MCP client
+- Tools: `rag_query`, `rag_retrieve`, `rag_ingest_text`, `rag_collections`, `rag_metrics`
+- JSON-RPC 2.0 over stdio (standard MCP transport)
+- Zero-config registration via `mcp-config.json`
+
+### Adaptive Retrieval (Self-Learning)
+- **Auto-tune** alpha and top-k based on historical eval scores
+- Correlates retrieval parameters with faithfulness + relevance
+- Bins alpha values and selects optimal configuration per collection
+- Minimum 10 queries before tuning activates
 
 ### Evaluation (the differentiator)
 | Metric | What it measures | Method |
@@ -75,16 +95,21 @@ RAG Eval Engine is a **complete RAG system** that doesn't just answer questions 
 ### Dashboard (6 pages)
 | Page | Purpose |
 |---|---|
-| **Query Playground** | Chat interface with streaming, model selector, eval score badges, source citations |
-| **Document Management** | Drag-and-drop upload, chunking strategy picker, file type badges, collection stats |
-| **Retrieval Explorer** | Test hybrid retrieval independently, tune alpha/top-k, visualize chunk scores |
-| **Evaluation Dashboard** | Time-series area charts, collection filter, auto-refresh, latency distribution |
+| **Query Playground** | Chat interface with streaming, model selector, eval score badges, source citations, cache hit & cost badges |
+| **Document Management** | Drag-and-drop upload, chunking strategy picker, file type badges, collection stats, toast notifications |
+| **Retrieval Explorer** | Test hybrid retrieval independently, tune alpha/top-k, auto-tune recommendations, expand/collapse chunks |
+| **Evaluation Dashboard** | Time-series charts, cache stats, cost tracking, CSV export, collection filter, auto-refresh |
 | **Test Sets** | Create/manage test Q&A sets, auto-generate questions, run batch evaluations |
 | **Settings** | System status, available models, full configuration display |
 
 - **Dark mode** with system preference detection and manual toggle
 - **Responsive** — works on mobile with collapsible sidebar
 - **Real-time streaming** — watch tokens appear as the LLM generates
+- **Skeleton loading** shimmer states replace all loading spinners
+- **Toast notifications** for success/error feedback
+- **CSV export** for evaluation metrics
+- **Keyboard shortcuts** — `Ctrl+K` to focus query, nav hints in sidebar
+- **Cache hit badges** and cost tracking on query responses
 
 ### Screenshots
 
@@ -99,6 +124,38 @@ RAG Eval Engine is a **complete RAG system** that doesn't just answer questions 
 | Test Sets | Settings |
 |---|---|
 | ![Test Sets](screenshots/05-test-sets.png) | ![Settings](screenshots/06-settings.png) |
+
+---
+
+## MCP Server
+
+RAG Eval Engine can be used as an MCP server, letting Claude Code (or any MCP client) query your knowledge base directly.
+
+### Setup
+
+Add to your `.claude/settings.json` or project `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "rag-eval-engine": {
+      "command": "python",
+      "args": ["-m", "src.mcp_server"],
+      "cwd": "/path/to/rag-eval-engine"
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description |
+|---|---|
+| `rag_query` | Full RAG pipeline — retrieve, generate, optionally evaluate |
+| `rag_retrieve` | Hybrid search returning ranked chunks with scores |
+| `rag_ingest_text` | Ingest raw text into a collection |
+| `rag_collections` | List collections with doc/chunk/vector counts |
+| `rag_metrics` | Get evaluation metrics summary |
 
 ---
 
@@ -137,13 +194,15 @@ RAG Eval Engine is a **complete RAG system** that doesn't just answer questions 
 | **Embeddings** | sentence-transformers (local), OpenAI (optional) |
 | **Vector DB** | Qdrant |
 | **Sparse Search** | BM25 via rank-bm25 |
-| **LLM** | Ollama (primary), OpenAI (fallback) |
+| **LLM** | Ollama (primary), OpenAI, Anthropic |
 | **Documents** | PyMuPDF (PDF), python-docx (DOCX), plain text |
 | **Evaluation** | LLM-as-judge metrics + heuristic fallbacks |
-| **Database** | SQLite (WAL mode) for metrics |
+| **Caching** | Semantic query cache via Qdrant (FACT pattern) |
+| **Database** | SQLite (WAL mode) for metrics + cache stats |
 | **Dashboard** | Next.js 14, Tailwind CSS, Recharts |
 | **Type Safety** | TypeScript strict + Pyright strict |
 | **Containers** | Docker Compose (Qdrant + API + Dashboard) |
+| **CI** | GitHub Actions (lint, type check, test, build) |
 
 ---
 
@@ -190,7 +249,7 @@ Open **http://localhost:3000**
 docker compose up -d
 ```
 
-This starts Qdrant, the API, and the dashboard. Ollama must be running on the host.
+This starts Qdrant, the API, and the dashboard with health checks and resource limits. Ollama must be running on the host.
 
 ---
 
@@ -199,7 +258,7 @@ This starts Qdrant, the API, and the dashboard. Ollama must be running on the ho
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/health` | System health check |
-| `GET` | `/api/settings` | Current configuration |
+| `GET` | `/api/settings` | Current configuration (includes cache settings) |
 | `GET` | `/api/models` | List available Ollama models |
 | `POST` | `/api/ingest` | Upload and ingest files |
 | `GET` | `/api/ingest/{job_id}` | Check ingestion job status |
@@ -209,6 +268,9 @@ This starts Qdrant, the API, and the dashboard. Ollama must be running on the ho
 | `POST` | `/api/query` | Full RAG pipeline (retrieve + generate + eval) |
 | `GET` | `/api/metrics` | Aggregate eval metrics with time-series |
 | `GET` | `/api/metrics/{query_id}` | Per-query eval breakdown |
+| `GET` | `/api/cache/stats` | Cache hit rate, entries, latency savings |
+| `DELETE` | `/api/cache` | Clear the semantic query cache |
+| `GET` | `/api/retrieval/optimal-params` | Auto-tuned alpha and top-k recommendation |
 | `POST` | `/api/test-sets` | Create a test Q&A set |
 | `GET` | `/api/test-sets` | List test sets |
 | `DELETE` | `/api/test-sets/{id}` | Delete a test set |
@@ -223,17 +285,37 @@ This starts Qdrant, the API, and the dashboard. Ollama must be running on the ho
 All settings are configurable via environment variables (prefix `RAG_`) or `.env` file:
 
 ```bash
-RAG_QDRANT_URL=http://localhost:6333      # Qdrant connection
+# Infrastructure
+RAG_QDRANT_URL=http://localhost:6333
+RAG_OLLAMA_URL=http://localhost:11434
+
+# Embeddings
 RAG_EMBEDDING_MODEL=all-MiniLM-L6-v2      # or BAAI/bge-base-en-v1.5, text-embedding-3-small
+
+# Chunking
 RAG_CHUNKING_STRATEGY=recursive            # or fixed, semantic
 RAG_CHUNK_SIZE=512                         # tokens per chunk
 RAG_CHUNK_OVERLAP=50                       # overlap between chunks
-RAG_OLLAMA_URL=http://localhost:11434      # Ollama connection
+
+# LLM
 RAG_DEFAULT_MODEL=qwen2.5-coder:14b       # default LLM model
+
+# Retrieval
 RAG_HYBRID_ALPHA=0.7                       # 0=pure BM25, 1=pure vector
 RAG_DEFAULT_TOP_K=5                        # chunks to retrieve
+
+# Evaluation
 RAG_EVAL_ON_QUERY=true                     # evaluate every query
 RAG_EVAL_LIGHTWEIGHT=true                  # only faithfulness+relevance per query
+
+# Cache
+RAG_CACHE_ENABLED=true                     # enable semantic query cache
+RAG_CACHE_THRESHOLD=0.95                   # similarity threshold for cache hits
+RAG_CACHE_TTL_SECONDS=3600                 # cache entry time-to-live
+
+# Cloud LLM (optional)
+OPENAI_API_KEY=sk-...                      # enables gpt-4o, gpt-4o-mini
+ANTHROPIC_API_KEY=sk-ant-...               # enables claude-3.5-sonnet, claude-3-opus
 ```
 
 ---
@@ -243,8 +325,11 @@ RAG_EVAL_LIGHTWEIGHT=true                  # only faithfulness+relevance per que
 ```
 rag-eval-engine/
 ├── src/
-│   ├── main.py                    # FastAPI entry point
+│   ├── main.py                    # FastAPI entry point + middleware
 │   ├── config.py                  # Pydantic settings
+│   ├── mcp_server.py              # MCP server (JSON-RPC over stdio)
+│   ├── caching/
+│   │   └── query_cache.py         # Semantic query cache (FACT pattern)
 │   ├── ingestion/
 │   │   ├── loader.py              # PDF, DOCX, text, code loading
 │   │   ├── chunker.py             # 3 chunking strategies
@@ -252,13 +337,15 @@ rag-eval-engine/
 │   ├── retrieval/
 │   │   ├── vector_search.py       # Qdrant semantic search
 │   │   ├── sparse_search.py       # BM25 keyword search
-│   │   └── hybrid_ranker.py       # Reciprocal Rank Fusion
+│   │   ├── hybrid_ranker.py       # Reciprocal Rank Fusion
+│   │   └── auto_tune.py           # Adaptive retrieval param optimization
 │   ├── generation/
 │   │   ├── prompt_builder.py      # RAG prompt construction
-│   │   └── llm_client.py          # Ollama + OpenAI, streaming
+│   │   ├── llm_client.py          # Ollama + OpenAI + Anthropic, streaming
+│   │   └── cost_tracker.py        # Token-based cost calculation
 │   ├── evaluation/
 │   │   ├── metrics.py             # Faithfulness, relevance, hallucination scoring
-│   │   ├── eval_pipeline.py       # Query pipeline + batch eval
+│   │   ├── eval_pipeline.py       # Query pipeline + batch eval + cache
 │   │   └── test_sets.py           # Test dataset management + auto-generation
 │   ├── routes/
 │   │   ├── ingest.py              # /api/ingest, /api/collections
@@ -266,24 +353,29 @@ rag-eval-engine/
 │   │   ├── query.py               # /api/query (+ SSE streaming)
 │   │   └── evaluate.py            # /api/evaluate, /api/metrics, /api/test-sets
 │   └── db/
-│       └── models.py              # SQLite schema + async queries
+│       └── models.py              # SQLite schema + migrations
 ├── dashboard/                     # Next.js 14 App Router
 │   └── src/
 │       ├── app/
-│       │   ├── page.tsx           # Query Playground (streaming + eval)
+│       │   ├── page.tsx           # Query Playground (streaming + eval + cache)
 │       │   ├── documents/         # Document upload & management
-│       │   ├── retrieval/         # Retrieval Explorer
-│       │   ├── eval/              # Evaluation dashboard with charts
+│       │   ├── retrieval/         # Retrieval Explorer + auto-tune
+│       │   ├── eval/              # Evaluation dashboard + cost + cache stats
 │       │   ├── test-sets/         # Test set management & batch eval
 │       │   └── settings/          # Configuration & status
 │       ├── components/
-│       │   └── sidebar.tsx        # Navigation + dark mode toggle
+│       │   ├── sidebar.tsx        # Navigation + keyboard shortcuts
+│       │   ├── toast.tsx          # Toast notification system
+│       │   └── skeleton.tsx       # Shimmer skeleton loading components
 │       └── lib/
 │           ├── api.ts             # Type-safe API client
 │           └── utils.ts           # Formatting utilities
 ├── tests/                         # 68 tests
 ├── eval_datasets/                 # Sample Q&A pairs
-├── docker-compose.yml             # Full stack orchestration
+├── sample_docs/                   # Sample PDFs for testing
+├── mcp-config.json                # MCP server registration config
+├── .github/workflows/ci.yml       # CI pipeline (lint, type check, test, build)
+├── docker-compose.yml             # Full stack with health checks
 ├── Dockerfile                     # Python API container
 └── pyproject.toml                 # Project metadata & deps
 ```
@@ -307,11 +399,14 @@ pytest tests/ -v
 
 ## Key Design Decisions
 
-1. **Ollama-first**: Designed for local LLMs. No API keys needed to get started. OpenAI is an optional fallback.
+1. **Ollama-first**: Designed for local LLMs. No API keys needed to get started. Cloud providers are optional.
 2. **Hybrid retrieval**: Pure vector search misses keyword matches. Pure BM25 misses semantic meaning. RRF gives you both.
 3. **Eval built-in**: Not a separate tool or pipeline. Every query optionally gets scored in-line.
-4. **SQLite for metrics**: Zero-config, WAL mode for concurrent access. Metrics are a write-heavy append-only workload — perfect for SQLite.
-5. **Heuristic fallbacks**: When the LLM judge is slow or unavailable, word-overlap heuristics provide approximate scores.
+4. **Semantic caching**: Embedding-based cache catches semantically similar queries, not just exact matches. Sub-100ms responses on hits.
+5. **Self-learning retrieval**: The system correlates retrieval parameters with eval scores and auto-tunes alpha/top-k over time.
+6. **SQLite for metrics**: Zero-config, WAL mode for concurrent access. Metrics are a write-heavy append-only workload — perfect for SQLite.
+7. **Heuristic fallbacks**: When the LLM judge is slow or unavailable, word-overlap heuristics provide approximate scores.
+8. **MCP integration**: Expose your knowledge base as tools for AI coding assistants via the Model Context Protocol.
 
 ---
 

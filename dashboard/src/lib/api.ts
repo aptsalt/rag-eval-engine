@@ -93,6 +93,8 @@ export interface QueryResponse {
   tokens_used: number;
   latency_ms: number;
   model: string;
+  cache_hit: boolean;
+  cost_usd: number;
 }
 
 export interface MetricsResponse {
@@ -103,6 +105,8 @@ export interface MetricsResponse {
   avg_latency_ms: number | null;
   p50_latency_ms: number | null;
   p95_latency_ms: number | null;
+  total_cost_usd: number;
+  avg_cost_per_query: number;
   time_series: TimeSeriesPoint[];
 }
 
@@ -114,6 +118,27 @@ export interface TimeSeriesPoint {
   hallucination_rate: number | null;
   latency_ms: number | null;
   tokens_used: number | null;
+  cost_usd: number;
+}
+
+export interface CacheStats {
+  cache_enabled: boolean;
+  cache_size: number;
+  total_lookups: number;
+  hits: number;
+  misses: number;
+  hit_rate_percent: number;
+  avg_saved_latency_ms: number;
+  threshold: number;
+  ttl_seconds: number;
+}
+
+export interface OptimalParams {
+  sufficient_data: boolean;
+  total_queries: number;
+  min_required?: number;
+  optimal_alpha?: number | null;
+  optimal_top_k?: number | null;
 }
 
 export interface AppSettings {
@@ -127,6 +152,9 @@ export interface AppSettings {
   eval_on_query: boolean;
   eval_lightweight: boolean;
   use_reranker: boolean;
+  cache_enabled: boolean;
+  cache_threshold: number;
+  cache_ttl_seconds: number;
 }
 
 export interface TestSet {
@@ -215,6 +243,7 @@ export const api = {
     top_k?: number;
     model?: string;
     evaluate?: boolean;
+    auto_tune?: boolean;
   }) =>
     fetchAPI<QueryResponse>('/api/query', {
       method: 'POST',
@@ -255,6 +284,13 @@ export const api = {
     const query = params.toString();
     return fetchAPI<MetricsResponse>(`/api/metrics${query ? `?${query}` : ''}`);
   },
+
+  getCacheStats: () => fetchAPI<CacheStats>('/api/cache/stats'),
+
+  clearCache: () => fetchAPI<{ status: string; entries_removed: number }>('/api/cache', { method: 'DELETE' }),
+
+  getOptimalParams: (collection: string) =>
+    fetchAPI<OptimalParams>(`/api/retrieval/optimal-params?collection=${collection}`),
 
   getSettings: () => fetchAPI<AppSettings>('/api/settings'),
 

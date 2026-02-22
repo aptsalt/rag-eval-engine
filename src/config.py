@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     hybrid_alpha: float = 0.7  # weight toward vector search (1.0 = pure vector)
     use_reranker: bool = False
 
+    # Cache
+    cache_enabled: bool = True
+    cache_threshold: float = 0.95
+    cache_ttl_seconds: int = 3600
+
     # Eval
     eval_on_query: bool = True
     eval_lightweight: bool = True  # only faithfulness + relevance in query mode

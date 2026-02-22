@@ -142,6 +142,9 @@ async def get_metrics_endpoint(
     p95_idx = int(len(sorted_latencies) * 0.95)
     p95 = sorted_latencies[min(p95_idx, len(sorted_latencies) - 1)] if sorted_latencies else None
 
+    cost_vals = [m.get("cost_usd", 0) for m in metrics if m.get("cost_usd") is not None]
+    total_cost = sum(cost_vals) if cost_vals else 0
+
     time_series = [
         {
             "query_id": m["id"],
@@ -151,6 +154,7 @@ async def get_metrics_endpoint(
             "hallucination_rate": m.get("hallucination_rate"),
             "latency_ms": m.get("latency_ms"),
             "tokens_used": m.get("tokens_used"),
+            "cost_usd": m.get("cost_usd", 0),
         }
         for m in reversed(metrics)
     ]
@@ -179,6 +183,8 @@ async def get_metrics_endpoint(
         ),
         "p50_latency_ms": p50,
         "p95_latency_ms": p95,
+        "total_cost_usd": round(total_cost, 4),
+        "avg_cost_per_query": round(total_cost / len(metrics), 6) if metrics else 0,
         "time_series": time_series,
     }
 

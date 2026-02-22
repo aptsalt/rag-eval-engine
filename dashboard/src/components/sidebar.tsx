@@ -7,12 +7,12 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const navigation = [
-  { name: 'Query', href: '/', icon: MessageIcon },
-  { name: 'Documents', href: '/documents', icon: FolderIcon },
-  { name: 'Retrieval', href: '/retrieval', icon: SearchIcon },
-  { name: 'Evaluation', href: '/eval', icon: ChartIcon },
-  { name: 'Test Sets', href: '/test-sets', icon: ClipboardIcon },
-  { name: 'Settings', href: '/settings', icon: GearIcon },
+  { name: 'Query', href: '/', icon: MessageIcon, shortcut: 'K' },
+  { name: 'Documents', href: '/documents', icon: FolderIcon, shortcut: 'D' },
+  { name: 'Retrieval', href: '/retrieval', icon: SearchIcon, shortcut: 'R' },
+  { name: 'Evaluation', href: '/eval', icon: ChartIcon, shortcut: 'E' },
+  { name: 'Test Sets', href: '/test-sets', icon: ClipboardIcon, shortcut: '' },
+  { name: 'Settings', href: '/settings', icon: GearIcon, shortcut: '' },
 ];
 
 export function Sidebar() {
@@ -85,7 +85,12 @@ export function Sidebar() {
               )}
             >
               <item.icon className="h-5 w-5" />
-              <span>{item.name}</span>
+              <span className="flex-1">{item.name}</span>
+              {item.shortcut && (
+                <kbd className="hidden md:inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-1 text-[10px] font-mono text-gray-400">
+                  {item.shortcut}
+                </kbd>
+              )}
             </Link>
           );
         })}

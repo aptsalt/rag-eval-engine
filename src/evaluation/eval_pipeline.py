@@ -32,6 +32,8 @@ class QueryResult:
     latency_retrieval_ms: float
     latency_generation_ms: float
     model: str
+    cache_hit: bool = False
+    cost_usd: float = 0.0
 
 
 async def run_query_pipeline(
@@ -41,13 +43,49 @@ async def run_query_pipeline(
     model: str | None = None,
     evaluate: bool = True,
     lightweight_eval: bool = True,
+    alpha: float | None = None,
+    auto_tune: bool = False,
 ) -> QueryResult:
+    from src.caching.query_cache import CachedResult, cache_lookup, cache_store
+
     query_id = str(uuid.uuid4())
     model_name = model or settings.default_model
     start = time.perf_counter()
 
+    # Check cache first
+    cached = await cache_lookup(query, collection)
+    if cached is not None:
+        total_latency = (time.perf_counter() - start) * 1000
+        return QueryResult(
+            query_id=query_id,
+            answer=cached.answer,
+            sources=cached.sources,
+            eval_scores=None,
+            tokens_used=cached.tokens_used,
+            latency_ms=total_latency,
+            latency_retrieval_ms=0,
+            latency_generation_ms=0,
+            model=cached.model,
+            cache_hit=True,
+        )
+
+    # Auto-tune retrieval params if requested
+    effective_alpha = alpha
+    effective_top_k = top_k
+    if auto_tune:
+        try:
+            from src.retrieval.auto_tune import get_optimal_params
+
+            opt_alpha, opt_top_k = await get_optimal_params(collection)
+            if opt_alpha is not None:
+                effective_alpha = opt_alpha
+            if opt_top_k is not None:
+                effective_top_k = opt_top_k
+        except Exception:
+            pass
+
     retrieval_start = time.perf_counter()
-    results = hybrid_search(query, collection, top_k)
+    results = hybrid_search(query, collection, effective_top_k, effective_alpha)
     latency_retrieval = (time.perf_counter() - retrieval_start) * 1000
 
     system_prompt, user_prompt, sources = build_prompt(query, results)
@@ -76,6 +114,14 @@ async def run_query_pipeline(
     for s in sources:
         source_dicts.append(dict(s))
 
+    # Calculate cost
+    from src.generation.cost_tracker import calculate_cost
+
+    cost = calculate_cost(model_name, llm_response.tokens_used, 0)
+
+    used_alpha = effective_alpha if effective_alpha is not None else settings.hybrid_alpha
+    used_top_k = effective_top_k or settings.default_top_k
+
     await insert_query_log(
         query_id=query_id,
         collection=collection,
@@ -87,6 +133,9 @@ async def run_query_pipeline(
         latency_ms=total_latency,
         latency_retrieval_ms=latency_retrieval,
         latency_generation_ms=latency_generation,
+        cost_usd=cost,
+        alpha=used_alpha,
+        top_k=used_top_k,
     )
 
     if eval_scores:
@@ -101,6 +150,29 @@ async def run_query_pipeline(
             context_recall=eval_scores.context_recall,
         )
 
+    # Store in cache
+    eval_dict = None
+    if eval_scores:
+        eval_dict = {
+            "faithfulness": eval_scores.faithfulness,
+            "relevance": eval_scores.relevance,
+            "hallucination_rate": eval_scores.hallucination_rate,
+        }
+
+    await cache_store(
+        query,
+        collection,
+        CachedResult(
+            answer=llm_response.content,
+            sources=source_dicts,
+            eval_scores=eval_dict,
+            model=model_name,
+            created_at=time.time(),
+            tokens_used=llm_response.tokens_used,
+            latency_ms=total_latency,
+        ),
+    )
+
     return QueryResult(
         query_id=query_id,
         answer=llm_response.content,
@@ -111,6 +183,7 @@ async def run_query_pipeline(
         latency_retrieval_ms=latency_retrieval,
         latency_generation_ms=latency_generation,
         model=model_name,
+        cost_usd=cost,
     )
 
 
